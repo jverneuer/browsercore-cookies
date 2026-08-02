@@ -12,10 +12,8 @@ export default defineConfig({
         coverage: {
             provider: "v8",
             include: ["src/**/*.ts"],
-            // types.ts is type-only (compiles to `export {}`); it carries no
-            // executable statements, so it is excluded from coverage measurement.
-            exclude: ["src/types.ts"],
-            reporter: ["text"],
+            all: true,
+            reporter: ["text", "html", "json-summary"],
         },
     },
 });
