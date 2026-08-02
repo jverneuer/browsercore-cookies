@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
     createCookieJar,
     parseSetCookieHeader,
@@ -7,11 +10,17 @@ import {
     normalizeDomain,
     defaultPath,
     CookieDomainError,
+    CookieParseError,
+    CookieError,
     makeCookie,
     isSameSiteHost,
     sameSiteAllows,
+    saveJar,
+    loadJar,
+    assertNever,
 } from "../src/index.js";
-import type { CookieUrl, SameSiteContext } from "../src/types.js";
+import { createId } from "../src/utils.js";
+import type { Cookie, CookieUrl, SameSiteContext } from "../src/types.js";
 
 /** Build a cookie with an explicit SameSite value, hostOnly, default path/domain. */
 function ssCookie(sameSite: "Strict" | "Lax" | "None", secure = false) {
@@ -302,5 +311,259 @@ describe("SameSite enforcement", () => {
         const crossSite = jar.getCookies(exampleUrl, crossSiteSubresource);
         // Only the None cookie survives a cross-site subresource request.
         expect(crossSite.map((c) => c.name)).toEqual(["none"]);
+    });
+});
+
+describe("parseSetCookieHeader error handling", () => {
+    it("throws CookieParseError on an empty header", () => {
+        expect(() => parseSetCookieHeader("", exampleUrl)).toThrow(CookieParseError);
+    });
+
+    it("throws CookieParseError on a whitespace-only header", () => {
+        // After trimming and filtering, no non-empty parts remain.
+        expect(() => parseSetCookieHeader("   ;   ", exampleUrl)).toThrow(CookieParseError);
+    });
+
+    it("throws CookieParseError when name=value has no '='", () => {
+        expect(() => parseSetCookieHeader("noequals", exampleUrl)).toThrow(CookieParseError);
+    });
+
+    it("throws CookieParseError when the name is empty", () => {
+        // `=value` → eq === 0, which is rejected as malformed.
+        expect(() => parseSetCookieHeader("=value", exampleUrl)).toThrow(CookieParseError);
+    });
+
+    it("throws CookieParseError on an invalid Expires", () => {
+        expect(() => parseSetCookieHeader("a=1; Expires=not-a-date", exampleUrl)).toThrow(
+            CookieParseError,
+        );
+    });
+
+    it("throws CookieParseError on a non-integer Max-Age", () => {
+        expect(() => parseSetCookieHeader("a=1; Max-Age=abc", exampleUrl)).toThrow(CookieParseError);
+    });
+
+    it("throws CookieParseError on an empty Max-Age", () => {
+        expect(() => parseSetCookieHeader("a=1; Max-Age=", exampleUrl)).toThrow(CookieParseError);
+    });
+
+    it("throws CookieParseError on an empty Domain", () => {
+        expect(() => parseSetCookieHeader("a=1; Domain=", exampleUrl)).toThrow(CookieParseError);
+    });
+
+    it("exposes the raw header on a parse error", () => {
+        const raw = "a=1; Expires=bogus";
+        try {
+            parseSetCookieHeader(raw, exampleUrl);
+            expect.unreachable("should have thrown");
+        } catch (e) {
+            expect(e).toBeInstanceOf(CookieParseError);
+            expect((e as CookieParseError).raw).toBe(raw);
+        }
+    });
+});
+
+describe("parseSetCookieHeader attributes", () => {
+    it("parses the Partitioned attribute", () => {
+        const cookie = parseSetCookieHeader("a=1; Partitioned", exampleUrl);
+        expect(cookie.partitioned).toBe(true);
+    });
+
+    it("ignores unknown attributes", () => {
+        const cookie = parseSetCookieHeader("a=1; FooBar=baz; Secure", exampleUrl);
+        expect(cookie.name).toBe("a");
+        expect(cookie.secure).toBe(true);
+    });
+
+    it("falls back to the default path when Path lacks a leading slash", () => {
+        const url: CookieUrl = { hostname: "example.com", pathname: "/a/b", protocol: "https:" };
+        const cookie = parseSetCookieHeader("a=1; Path=foo", url);
+        expect(cookie.path).toBe("/a");
+    });
+
+    it("keeps the default SameSite (Lax) when the value is unrecognized", () => {
+        const cookie = parseSetCookieHeader("a=1; SameSite=Bogus", exampleUrl);
+        expect(cookie.sameSite).toBe("Lax");
+    });
+
+    it("parses a value containing '=' signs", () => {
+        const cookie = parseSetCookieHeader("a=MTIzNA==", exampleUrl);
+        expect(cookie.name).toBe("a");
+        expect(cookie.value).toBe("MTIzNA==");
+    });
+});
+
+describe("isExpired", () => {
+    it("returns true past the Expires date", () => {
+        const past = new Date(Date.now() - 1000);
+        const cookie = makeCookie({ name: "a", value: "1", expires: past }, exampleUrl);
+        expect(isExpired(cookie, Date.now())).toBe(true);
+    });
+
+    it("returns false before the Expires date", () => {
+        const future = new Date(Date.now() + 60_000);
+        const cookie = makeCookie({ name: "a", value: "1", expires: future }, exampleUrl);
+        expect(isExpired(cookie, Date.now())).toBe(false);
+    });
+
+    it("treats a session cookie (no expiry) as never expired", () => {
+        const cookie = makeCookie({ name: "a", value: "1" }, exampleUrl);
+        expect(isExpired(cookie, Date.now() + 10 ** 9)).toBe(false);
+    });
+});
+
+describe("makeCookie defaults", () => {
+    it("applies RFC 6265 defaults when optional fields are omitted", () => {
+        const url: CookieUrl = { hostname: "Example.COM", pathname: "/x/y", protocol: "https:" };
+        const cookie = makeCookie({ name: "a", value: "1" }, url, 1000);
+
+        expect(cookie.domain).toBe("example.com");
+        expect(cookie.path).toBe("/x");
+        expect(cookie.secure).toBe(false);
+        expect(cookie.httpOnly).toBe(false);
+        expect(cookie.sameSite).toBe("Lax");
+        expect(cookie.partitioned).toBe(false);
+        expect(cookie.hostOnly).toBe(true);
+        expect(cookie.creationTime).toBe(1000);
+        expect(cookie.lastAccessTime).toBe(1000);
+    });
+
+    it("honors every explicit option", () => {
+        const expires = new Date(Date.now() + 60_000);
+        const cookie = makeCookie(
+            {
+                name: "a",
+                value: "1",
+                domain: ".Example.com",
+                path: "/api",
+                expires,
+                maxAge: 30,
+                secure: true,
+                httpOnly: true,
+                sameSite: "Strict",
+                partitioned: true,
+                hostOnly: false,
+            },
+            exampleUrl,
+            2000,
+        );
+
+        expect(cookie.domain).toBe("example.com");
+        expect(cookie.path).toBe("/api");
+        expect(cookie.expires).toBe(expires);
+        expect(cookie.maxAge).toBe(30);
+        expect(cookie.secure).toBe(true);
+        expect(cookie.httpOnly).toBe(true);
+        expect(cookie.sameSite).toBe("Strict");
+        expect(cookie.partitioned).toBe(true);
+        expect(cookie.hostOnly).toBe(false);
+        expect(cookie.creationTime).toBe(2000);
+    });
+});
+
+describe("cookie jar sorting and domain-mismatch handling", () => {
+    it("sorts cookies by longer path first (RFC 6265 §5.4)", () => {
+        const jar = createCookieJar();
+        // Both match "/a" but have different path lengths.
+        jar.setCookie("short=1; Path=/", exampleUrl);
+        jar.setCookie("long=1; Path=/a", { ...exampleUrl, pathname: "/a" });
+
+        const cookies = jar.getCookies({ ...exampleUrl, pathname: "/a" });
+        expect(cookies.map((c) => c.name)).toEqual(["long", "short"]);
+    });
+
+    it("breaks path-length ties by earlier creation time", () => {
+        const jar = createCookieJar();
+        jar.setCookie("first=1; Path=/api", exampleUrl);
+        jar.setCookie("second=2; Path=/api", exampleUrl);
+
+        const cookies = jar.getCookies({ ...exampleUrl, pathname: "/api" });
+        expect(cookies.map((c) => c.name)).toEqual(["first", "second"]);
+    });
+
+    it("accepts a domain-mismatched cookie when rejectDomainMismatch is false", () => {
+        const jar = createCookieJar({ rejectDomainMismatch: false });
+        // Would throw under the default (true) setting.
+        expect(() => jar.setCookie("a=1; Domain=.evil.com", exampleUrl)).not.toThrow();
+        // The cookie is stored under evil.com; it matches that host, not example.com.
+        const evilUrl: CookieUrl = { hostname: "evil.com", pathname: "/", protocol: "https:" };
+        expect(jar.getCookies(evilUrl)).toHaveLength(1);
+    });
+});
+
+describe("cookie jar serialization with expiry", () => {
+    it("round-trips a cookie that has an Expires date", () => {
+        const jar = createCookieJar();
+        // Far enough in the future that the cookie is not expired when read back.
+        jar.setCookie("a=1; Expires=Wed, 21 Oct 2099 07:28:00 GMT", exampleUrl);
+
+        const restored = createCookieJar();
+        restored.deserialize(jar.serialize());
+
+        const cookies = restored.getCookies(exampleUrl);
+        expect(cookies).toHaveLength(1);
+        expect(cookies[0]?.expires).toBeInstanceOf(Date);
+        expect(cookies[0]?.expires?.toISOString()).toBe("2099-10-21T07:28:00.000Z");
+    });
+});
+
+describe("persistence (saveJar / loadJar)", () => {
+    it("writes a jar to disk and reads it back", async () => {
+        const dir = await mkdtemp(join(tmpdir(), "cookies-"));
+        const file = join(dir, "jar.json");
+        try {
+            const jar = createCookieJar();
+            jar.setCookie("session=abc; Path=/; Secure", exampleUrl);
+            jar.setCookie("prefs=dark", exampleUrl);
+            await saveJar(jar, file);
+
+            const loaded = await loadJar(file);
+            const cookies = loaded.getCookies(exampleUrl);
+            expect(cookies.map((c) => c.name).sort()).toEqual(["prefs", "session"]);
+        } finally {
+            await rm(dir, { recursive: true, force: true });
+        }
+    });
+});
+
+describe("error classes", () => {
+    it("CookieDomainError carries its kind and fields", () => {
+        const err = new CookieDomainError(".evil.com", "example.com");
+        expect(err).toBeInstanceOf(CookieError);
+        expect(err.kind).toBe("CookieDomainError");
+        expect(err.domain).toBe(".evil.com");
+        expect(err.requestHost).toBe("example.com");
+        expect(err.name).toBe("CookieDomainError");
+    });
+
+    it("CookieParseError carries its kind and raw header", () => {
+        const err = new CookieParseError("bad", "empty header");
+        expect(err).toBeInstanceOf(CookieError);
+        expect(err.kind).toBe("CookieParseError");
+        expect(err.raw).toBe("bad");
+        expect(err.name).toBe("CookieParseError");
+    });
+
+    it("CookieError records an optional cause", () => {
+        const cause = new Error("root");
+        const err = new CookieError("TestError", "boom", { cause });
+        expect(err.kind).toBe("TestError");
+        expect(err.cause).toBe(cause);
+        expect(err.name).toBe("CookieError");
+    });
+});
+
+describe("utility functions", () => {
+    it("assertNever throws on any value", () => {
+        // `assertNever` is typed `(x: never)`; callers only hit it on exhaustiveness
+        // failures, so we exercise the throw with a forced `never` argument.
+        expect(() => assertNever("surprise" as never)).toThrow(/Unexpected value/);
+    });
+
+    it("createId builds a branded id with the given prefix", () => {
+        const id = createId("jar");
+        expect(id.startsWith("jar_")).toBe(true);
+        // prefix + "_" + timestamp(base36) + "_" + random(base36).
+        expect(id.split("_")).toHaveLength(3);
     });
 });

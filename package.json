@@ -1,47 +1,52 @@
 {
-  "name": "@browsercore/cookies",
-  "version": "0.1.4",
-  "description": "RFC 6265-compliant cookie management: parsing, jar, domain matching, persistence. Independent from HTTP.",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/jverneuer/browsercore-cookies.git"
-  },
-  "homepage": "https://github.com/jverneuer/browsercore-cookies#readme",
-  "bugs": {
-    "url": "https://github.com/jverneuer/browsercore-cookies/issues"
-  },
-  "license": "MIT",
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+    "name": "@browsercore/cookies",
+    "version": "0.1.5",
+    "description": "RFC 6265-compliant cookie management: parsing, jar, domain matching, persistence. Independent from HTTP.",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/jverneuer/browsercore-cookies.git"
+    },
+    "homepage": "https://github.com/jverneuer/browsercore-cookies#readme",
+    "bugs": {
+        "url": "https://github.com/jverneuer/browsercore-cookies/issues"
+    },
+    "license": "MIT",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist",
+        "LICENSE",
+        "README.md"
+    ],
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "scripts": {
+        "clean": "rm -rf dist",
+        "build": "tsc -p tsconfig.build.json",
+        "prepublishOnly": "npm run clean && npm run build",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "test": "vitest run",
+        "lint": "oxlint --type-aware src/"
+    },
+    "devDependencies": {
+        "@types/node": "^26.1.2",
+        "@typescript/typescript-darwin-arm64": "7.0.2",
+        "@vitest/coverage-v8": "2.1.8",
+        "typescript": "^7.0.0",
+        "vitest": "^2.1.8",
+        "oxlint": "^1.76.0",
+        "oxlint-tsgolint": "7.0.2001"
+    },
+    "engines": {
+        "node": ">=26.0.0"
     }
-  },
-  "files": [
-    "dist",
-    "LICENSE",
-    "README.md"
-  ],
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
-  },
-  "scripts": {
-    "clean": "rm -rf dist",
-    "build": "tsc -p tsconfig.build.json",
-    "prepublishOnly": "npm run clean && npm run build",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
-  },
-  "devDependencies": {
-    "@types/node": "^20.14.0",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.8"
-  },
-  "engines": {
-    "node": ">=24.0.0"
-  }
 }

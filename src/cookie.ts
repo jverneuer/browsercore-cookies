@@ -14,6 +14,7 @@ import type {
     SameSiteContext,
 } from "./types.js";
 import { CookieParseError } from "./errors.js";
+import { assertNever } from "./utils.js";
 
 /**
  * HTTP methods considered "safe" (idempotent reads). SameSite=Lax permits these
@@ -43,7 +44,7 @@ export function isSameSiteHost(requestHost: string, topLevelSite: string): boole
 
 /** A cross-site top-level navigation using a safe method is Lax-allowed. */
 function isSafeTopLevel(context: SameSiteContext): boolean {
-    if (!context.isTopLevelNavigation) {
+    if (context.isTopLevelNavigation !== true) {
         return false;
     }
     const method = context.method;
@@ -66,6 +67,8 @@ export function sameSiteAllows(cookie: Cookie, url: CookieUrl, context: SameSite
             return sameSite || isSafeTopLevel(context);
         case "None":
             return true;
+        default:
+            return assertNever(cookie.sameSite);
     }
 }
 
@@ -93,14 +96,13 @@ export function parseSetCookieHeader(raw: string, url: CookieUrl): Cookie {
     const now = Date.now();
     const parts = raw.split(";").map((p) => p.trim()).filter((p) => p !== "");
 
-    if (parts.length === 0) {
+    // `parts[0]` is `string | undefined` under noUncheckedIndexedAccess; the filter
+    // above makes the undefined case reachable only for an empty/whitespace header.
+    const nameValue = parts[0];
+    if (nameValue === undefined) {
         throw new CookieParseError(raw, "empty header");
     }
-
-    const [nameValue, ...attrParts] = parts;
-    if (nameValue === undefined) {
-        throw new CookieParseError(raw, "missing name=value");
-    }
+    const attrParts = parts.slice(1);
     const eq = nameValue.indexOf("=");
     if (eq <= 0) {
         throw new CookieParseError(raw, "malformed name=value");
@@ -259,8 +261,8 @@ export function makeCookie(options: CookieOptions, url: CookieUrl, now = Date.no
     return {
         name: options.name,
         value: options.value,
-        domain: options.domain === undefined ? normalizeDomain(url.hostname) : normalizeDomain(options.domain),
-        path: options.path === undefined ? defaultPath(url.pathname) : options.path,
+        domain: normalizeDomain(options.domain ?? url.hostname),
+        path: options.path ?? defaultPath(url.pathname),
         expires: options.expires,
         maxAge: options.maxAge,
         secure: options.secure ?? false,
