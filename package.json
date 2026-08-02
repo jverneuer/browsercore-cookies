@@ -2,6 +2,14 @@
   "name": "@browsercore/cookies",
   "version": "0.1.0",
   "description": "RFC 6265-compliant cookie management: parsing, jar, domain matching, persistence. Independent from HTTP.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jverneuer/browsercore-cookies.git"
+  },
+  "homepage": "https://github.com/jverneuer/browsercore-cookies#readme",
+  "bugs": {
+    "url": "https://github.com/jverneuer/browsercore-cookies/issues"
+  },
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
