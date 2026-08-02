@@ -1,9 +1,10 @@
 /**
  * In-memory cookie jar — the canonical {@link CookieJar} implementation.
  *
- * Cookies are stored in a trie: domain → path → name → Cookie. getCookies applies
- * RFC 6265 domain/path matching and sorts results per §5.4 (longer path first,
- * then earlier creation time).
+ * Cookies are stored in a flat `Map` keyed by a composite `domain\0path\0name`
+ * string, so lookup/insert/delete are O(1) and insertion order is stable. getCookies
+ * scans all stored cookies, applies RFC 6265 domain/path matching, and sorts the
+ * results per §5.4 (longer path first, then earlier creation time).
  */
 
 import type {
@@ -15,6 +16,19 @@ import type {
 } from "./types.js";
 import { CookieDomainError } from "./errors.js";
 import { cookieMatchesUrl, parseSetCookieHeader } from "./cookie.js";
+
+/**
+ * On-disk representation of a serialized jar. `expires` is an ISO string or null
+ * (JSON has no Date type); on deserialize it is converted back to a {@link Cookie}.
+ */
+interface SerializedJar {
+    readonly entries: readonly SerializedCookie[];
+}
+
+/** A cookie as written to disk: `expires` becomes an ISO string or null. */
+type SerializedCookie = Omit<Cookie, "expires"> & {
+    readonly expires: string | null;
+};
 
 /** Key used to look up a single cookie: domain + path + name. */
 function cookieKey(domain: string, path: string, name: string): string {
@@ -76,20 +90,19 @@ export function createCookieJar(options: CookieJarOptions = {}): CookieJar {
         },
 
         serialize(): string {
-            const entries = Array.from(store.values()).map((c) => ({
-                ...c,
-                expires: c.expires ? c.expires.toISOString() : null,
-            }));
+            const entries = Array.from(store.values()).map(
+                (c) =>
+                    ({
+                        ...c,
+                        expires: c.expires ? c.expires.toISOString() : null,
+                    }) satisfies SerializedCookie,
+            );
             return JSON.stringify({ entries });
         },
 
         deserialize(json: string): void {
             store.clear();
-            const parsed = JSON.parse(json) as {
-                entries: Array<
-                    Omit<Cookie, "expires"> & { expires: string | null }
-                >;
-            };
+            const parsed = JSON.parse(json) as SerializedJar;
             for (const entry of parsed.entries) {
                 const cookie: Cookie = {
                     ...entry,

@@ -5,6 +5,8 @@
  * cross-package imports.
  */
 
+import type { CookieJarId } from "./types.js";
+
 /**
  * Exhaustiveness check for `switch`/`if-else` over discriminated unions.
  * Call in the `default` branch: `default: assertNever(x)`.
@@ -16,6 +18,7 @@ export function assertNever(x: never): never {
 }
 
 /** Build a branded {@link CookieJarId}. */
-export function createId(prefix: string): string {
-    return `${prefix}_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
+export function createId(prefix: string): CookieJarId {
+    const raw = `${prefix}_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
+    return raw as CookieJarId;
 }

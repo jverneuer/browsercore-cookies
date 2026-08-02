@@ -23,6 +23,17 @@ import { assertNever } from "./utils.js";
 const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
 /**
+ * Map from a lowercase SameSite attribute value to its canonical form. Modeling
+ * the lookup (instead of capitalizing a `string` and casting) keeps the value
+ * typed as {@link SameSite} with no type assertion.
+ */
+const SAME_SITE_BY_LOWERCASE: Readonly<Record<"strict" | "lax" | "none", SameSite>> = {
+    strict: "Strict",
+    lax: "Lax",
+    none: "None",
+};
+
+/**
  * Same-site determination heuristic.
  *
  * A request is "same-site" when the request host shares the registrable domain
@@ -151,6 +162,8 @@ export function parseSetCookieHeader(raw: string, url: CookieUrl): Cookie {
                 hostOnly = false;
                 break;
             case "path":
+                // RFC 6265 §5.1.4: a Path attribute that is not absolute does not
+                // define a scope — fall back to the request-path default instead.
                 path = attrValue.startsWith("/") ? attrValue : defaultPath(url.pathname);
                 break;
             case "secure":
@@ -162,7 +175,7 @@ export function parseSetCookieHeader(raw: string, url: CookieUrl): Cookie {
             case "samesite": {
                 const normalized = attrValue.toLowerCase();
                 if (normalized === "strict" || normalized === "lax" || normalized === "none") {
-                    sameSite = (normalized.charAt(0).toUpperCase() + normalized.slice(1)) as SameSite;
+                    sameSite = SAME_SITE_BY_LOWERCASE[normalized];
                 }
                 break;
             }
