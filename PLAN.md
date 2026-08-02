@@ -66,5 +66,5 @@ Implement `saveJar()` / `loadJar()` in `src/persistence.ts` using `node:fs/promi
 - [x] Secure flag enforcement.
 - [x] JSON persistence via node:fs.
 - [x] RFC 6265 §5.4 sorting.
-- [ ] SameSite cross-site enforcement at the jar level.
-- [ ] Every test in `tests/` passes; `tsc --build` is clean.
+- [x] SameSite cross-site enforcement at the jar level. — enforced by the jar when caller supplies SameSiteContext.
+- [x] Every test in `tests/` passes; `tsc --build` is clean.
