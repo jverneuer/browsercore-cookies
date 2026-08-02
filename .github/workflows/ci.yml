@@ -32,7 +32,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add COVERAGE.md coverage/badge.json
+          # coverage/ is gitignored; force-add the generated report + badge
+          # so they are tracked in the repo root.
+          git add -f COVERAGE.md coverage/badge.json
           if git diff --cached --quiet; then
             echo "coverage report unchanged — nothing to commit"
           else
