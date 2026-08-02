@@ -1,4 +1,4 @@
-# @network/cookies
+# @browsercore/cookies
 
 RFC 6265-compliant cookie management: parsing, jar, domain matching, persistence. Independent from HTTP.
 
@@ -15,7 +15,7 @@ Parse `Set-Cookie` headers, match cookies against request URLs per RFC 6265 §5,
 ## Public API
 
 ```ts
-import { createCookieJar, parseSetCookieHeader } from "@network/cookies";
+import { createCookieJar, parseSetCookieHeader } from "@browsercore/cookies";
 
 const jar = createCookieJar();
 jar.setCookie("session=abc; Secure; SameSite=Lax", {
@@ -49,8 +49,8 @@ const cookies = jar.getCookies({
 ## Dependency graph
 
 ```
-@network/cookies
+@browsercore/cookies
   └─ node:fs (persistence only)
 ```
 
-No other `@network/*` packages are imported.
+No other `@browsercore/*` packages are imported.

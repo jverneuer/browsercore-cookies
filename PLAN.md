@@ -1,4 +1,4 @@
-# @network/cookies — Implementation Plan
+# @browsercore/cookies — Implementation Plan
 
 RFC 6265-compliant cookie management. Implement in this order; each step is
 independently testable.

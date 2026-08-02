@@ -1,5 +1,5 @@
 /**
- * Typed errors for @network/cookies.
+ * Typed errors for @browsercore/cookies.
  *
  * Errors are part of the API — callers match on `kind` instead of parsing messages.
  */

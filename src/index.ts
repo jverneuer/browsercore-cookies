@@ -1,5 +1,5 @@
 /**
- * @network/cookies — public API surface.
+ * @browsercore/cookies — public API surface.
  *
  * RFC 6265-compliant cookie management independent from any HTTP transport.
  * Higher layers (http1, http2, fetch) compose through these exports.

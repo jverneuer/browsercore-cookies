@@ -1,5 +1,5 @@
 /**
- * Domain types for @network/cookies.
+ * Domain types for @browsercore/cookies.
  *
  * RFC 6265-compliant cookie management. This package knows nothing about HTTP
  * transports — it only models cookies, a cookie jar, and the rules for matching
