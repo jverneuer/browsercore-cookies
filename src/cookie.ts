@@ -83,10 +83,17 @@ export function sameSiteAllows(cookie: Cookie, url: CookieUrl, context: SameSite
     }
 }
 
-/** Normalize a domain per RFC 6265 §5.1.2: lowercase, strip leading dot. */
+/**
+ * Normalize a domain per RFC 6265 §5.1.2: lowercase, strip leading AND trailing
+ * dots. A trailing dot (`example.com.`) is a fully-qualified (absolute) DNS name
+ * that browsers and RFC 6265 §5.1.3 domain matching treat as equivalent to its
+ * non-absolute form. Because {@link normalizeDomain} is applied to BOTH the cookie
+ * domain and the request host (see {@link cookieMatchesUrl} and {@link jar.ts}'s
+ * setCookie check), stripping it symmetrically keeps comparisons consistent and
+ * prevents a `Domain=example.com.` cookie from failing to match `example.com`.
+ */
 export function normalizeDomain(domain: string): string {
-    const trimmed = domain.trim().toLowerCase();
-    return trimmed.startsWith(".") ? trimmed.slice(1) : trimmed;
+    return domain.trim().toLowerCase().replace(/^\.+|\.+$/g, "");
 }
 
 /** Compute the default path per RFC 6265 §5.1.4 from a request path. */

@@ -62,6 +62,15 @@ describe("cookie jar", () => {
         );
     });
 
+    it("accepts a Domain with a trailing dot — matches the bare host (rejectDomainMismatch on)", () => {
+        // normalizeDomain strips the trailing dot, so `Domain=example.com.` is
+        // equivalent to `Domain=example.com` and must not trip rejectDomainMismatch.
+        const jar = createCookieJar();
+        expect(() => jar.setCookie("a=1; Domain=example.com.", exampleUrl)).not.toThrow();
+        // The stored cookie is served back for a request to the bare host.
+        expect(jar.getCookies(exampleUrl).map((c) => c.name)).toEqual(["a"]);
+    });
+
     it("expired cookies are filtered from getCookies", () => {
         const jar = createCookieJar();
         jar.setCookie("a=1; Max-Age=0", exampleUrl);

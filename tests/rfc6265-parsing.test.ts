@@ -146,12 +146,13 @@ describe("RFC 6265 §5.2.3 — Domain attribute normalization", () => {
         );
     });
 
-    it("keeps a trailing dot (documented: only a leading dot is stripped)", () => {
-        // normalizeDomain only strips one leading dot; a trailing dot survives and
-        // will subsequently fail domain matching against a normal host. Documented
-        // behavior, not a path that unquotes/normalizes further.
+    it("strips a trailing dot for RFC/browser parity", () => {
+        // normalizeDomain strips both leading AND trailing dots, so a fully-qualified
+        // `Domain=example.com.` becomes `"example.com"` and matches a normal request
+        // host. This is symmetric (applied to both the cookie domain and the request
+        // host) and matches browser behavior.
         const cookie = parseSetCookieHeader("a=1; Domain=example.com.", exampleUrl);
-        expect(cookie.domain).toBe("example.com.");
+        expect(cookie.domain).toBe("example.com");
         expect(cookie.hostOnly).toBe(false);
     });
 
