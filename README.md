@@ -77,7 +77,42 @@ const cookies = jar.getCookies({
   └─ node:fs (persistence only)
 ```
 
-No other `@browsercore/*` packages are imported.
+No other `@browsercore/*` runtime packages are imported. Build, lint, and test
+config comes from `@browsercore/dev` (see [Development](#development)).
+
+## Development
+
+This package follows the shared `@browsercore/dev` config used across the
+`@browsercore/*` family. That package is the single source of truth for the
+TypeScript strict flags, the vitest setup, and the oxlint rules; this repo
+extends it instead of keeping its own copies.
+
+| Concern | Mechanism |
+| --- | --- |
+| TypeScript | `tsconfig.json` `extends @browsercore/dev/tsconfig.base.json` |
+| Vitest | `definePackageConfig({ name: "cookies" })` from `@browsercore/dev/vitest` |
+| oxlint | `oxlint.config.ts` imports the base object from `@browsercore/dev/oxlint` |
+| Coverage report | `coverage-md` bin (from `@browsercore/dev`) replaces the old per-repo script |
+
+Because oxlint's JSON `extends` cannot resolve `node_modules` paths, the lint
+config lives in `oxlint.config.ts` rather than `.oxlintrc.json`.
+
+```bash
+npm install        # pulls in @browsercore/dev (file:../dev locally)
+npm run typecheck  # tsc --noEmit
+npm run lint       # oxlint --type-aware src/
+npm test           # vitest run
+npm run build      # tsc -p tsconfig.build.json (emit to dist/)
+```
+
+Generate the coverage report with the shared `coverage-md` binary (writes
+`COVERAGE.md` and `coverage/badge.json`, the latter backing the coverage badge
+above):
+
+```bash
+npx vitest run --coverage
+npx coverage-md
+```
 
 ## License
 
