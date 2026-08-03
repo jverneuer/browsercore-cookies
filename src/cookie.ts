@@ -93,7 +93,7 @@ export function sameSiteAllows(cookie: Cookie, url: CookieUrl, context: SameSite
  * prevents a `Domain=example.com.` cookie from failing to match `example.com`.
  */
 export function normalizeDomain(domain: string): string {
-    return domain.trim().toLowerCase().replace(/^\.+|\.+$/g, "");
+    return domain.trim().toLowerCase().replaceAll(/^\.+|\.+$/gu, "");
 }
 
 /** Compute the default path per RFC 6265 §5.1.4 from a request path. */
