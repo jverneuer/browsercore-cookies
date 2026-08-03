@@ -91,11 +91,10 @@ export function createCookieJar(options: CookieJarOptions = {}): CookieJar {
 
         serialize(): string {
             const entries = Array.from(store.values()).map(
-                (c) =>
-                    ({
-                        ...c,
-                        expires: c.expires ? c.expires.toISOString() : null,
-                    }) satisfies SerializedCookie,
+                (c): SerializedCookie => ({
+                    ...c,
+                    expires: c.expires ? c.expires.toISOString() : null,
+                }),
             );
             return JSON.stringify({ entries });
         },
