@@ -16,6 +16,7 @@ import type {
 } from "./types.js";
 import { CookieDomainError } from "./errors.js";
 import { cookieMatchesUrl, parseSetCookieHeader } from "./cookie.js";
+import { createId } from "./utils.js";
 
 /**
  * On-disk representation of a serialized jar. `expires` is an ISO string or null
@@ -49,8 +50,10 @@ export function createCookieJar(options: CookieJarOptions = {}): CookieJar {
     const rejectDomainMismatch = options.rejectDomainMismatch ?? true;
     // Primary store. A Map keeps insertion order stable and lookups O(1).
     const store = new Map<string, Cookie>();
+    const id = createId("jar");
 
     return {
+        id,
         getCookies(url: CookieUrl, context?: SameSiteContext): Cookie[] {
             const matches: Cookie[] = [];
             for (const cookie of store.values()) {

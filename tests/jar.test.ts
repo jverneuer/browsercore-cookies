@@ -9,7 +9,7 @@ import {
     saveJar,
     loadJar,
 } from "../src/index.js";
-import type { CookieUrl } from "../src/types.js";
+import type { CookieJarId, CookieUrl } from "../src/types.js";
 
 const exampleUrl: CookieUrl = {
     hostname: "example.com",
@@ -18,6 +18,18 @@ const exampleUrl: CookieUrl = {
 };
 
 describe("cookie jar", () => {
+    it("has a unique branded id", () => {
+        const a = createCookieJar();
+        const b = createCookieJar();
+        expect(a.id).toBeDefined();
+        expect(b.id).toBeDefined();
+        expect(a.id).not.toBe(b.id);
+        expect(a.id.startsWith("jar_")).toBe(true);
+        // Type-level check: id is a CookieJarId (branded string).
+        const id: CookieJarId = a.id;
+        expect(typeof id).toBe("string");
+    });
+
     it("stores and retrieves cookies by url", () => {
         const jar = createCookieJar();
         jar.setCookie("session=abc", exampleUrl);
