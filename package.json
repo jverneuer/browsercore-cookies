@@ -38,12 +38,13 @@
         "lint": "oxlint --type-aware src/"
     },
     "devDependencies": {
+        "@browsercore/dev": "^0.1.2",
         "@types/node": "^26.1.2",
         "@vitest/coverage-v8": "^4.1.10",
-        "typescript": "^7.0.0",
-        "vitest": "^4.1.10",
         "oxlint": "^1.76.0",
-        "oxlint-tsgolint": "7.0.2001"
+        "oxlint-tsgolint": "7.0.2001",
+        "typescript": "^7.0.0",
+        "vitest": "^4.1.10"
     },
     "engines": {
         "node": ">=26.0.0"
