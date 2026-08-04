@@ -194,6 +194,41 @@ describe("cookie jar — domain-mismatch handling variants", () => {
     });
 });
 
+describe("cookie jar — lastAccessTime tracking", () => {
+    it("updates lastAccessTime when a cookie is matched by getCookies", async () => {
+        const jar = createCookieJar();
+        jar.setCookie("a=1", exampleUrl);
+
+        const before = jar.getCookies(exampleUrl)[0];
+        expect(before).toBeDefined();
+        const initialAccess = before!.lastAccessTime;
+
+        // Wait a tick so the timestamp advances (ms resolution).
+        await new Promise((resolve) => setTimeout(resolve, 2));
+
+        const after = jar.getCookies(exampleUrl)[0];
+        expect(after).toBeDefined();
+        expect(after!.lastAccessTime).toBeGreaterThan(initialAccess);
+    });
+
+    it("does not update lastAccessTime for non-matching cookies", () => {
+        const jar = createCookieJar();
+        jar.setCookie("a=1; Path=/api", { ...exampleUrl, pathname: "/api" });
+
+        const before = jar.getCookies({ ...exampleUrl, pathname: "/api" })[0];
+        expect(before).toBeDefined();
+        const initialAccess = before!.lastAccessTime;
+
+        // Request a path that does NOT match /api.
+        jar.getCookies({ ...exampleUrl, pathname: "/other" });
+
+        // Re-read the cookie; its lastAccessTime must be unchanged.
+        const after = jar.getCookies({ ...exampleUrl, pathname: "/api" })[0];
+        expect(after).toBeDefined();
+        expect(after!.lastAccessTime).toBe(initialAccess);
+    });
+});
+
 describe("cookie jar — no-op and empty-result operations", () => {
     it("removeCookie on a missing key is a no-op", () => {
         const jar = createCookieJar();
