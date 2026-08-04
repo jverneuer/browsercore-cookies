@@ -55,11 +55,18 @@ export function createCookieJar(options: CookieJarOptions = {}): CookieJar {
     return {
         id,
         getCookies(url: CookieUrl, context?: SameSiteContext): Cookie[] {
+            const now = Date.now();
             const matches: Cookie[] = [];
-            for (const cookie of store.values()) {
+            for (const [key, cookie] of store.entries()) {
                 const result = cookieMatchesUrl(cookie, url, context);
                 if (result.matched) {
-                    matches.push(cookie);
+                    // Record last access time so the jar can drive LRU-style eviction
+                    // (RFC 6265 does not mandate eviction, but tracking access is the
+                    // prerequisite for any future size-bound policy). Replace the
+                    // stored cookie wholesale — cookies are immutable values.
+                    const accessed: Cookie = { ...cookie, lastAccessTime: now };
+                    store.set(key, accessed);
+                    matches.push(accessed);
                 }
             }
             return sortForHeader(matches);
