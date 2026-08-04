@@ -3,6 +3,16 @@
  *
  * RFC 6265-compliant cookie management independent from any HTTP transport.
  * Higher layers (http1, http2, fetch) compose through these exports.
+ *
+ * The package provides:
+ * - {@link createCookieJar} — the canonical in-memory {@link CookieJar}
+ * - {@link saveJar} / {@link loadJar} — JSON file persistence
+ * - {@link parseSetCookieHeader} / {@link makeCookie} — cookie construction
+ * - {@link cookieMatchesUrl} / {@link isExpired} / {@link normalizeDomain} / {@link defaultPath} — matching primitives
+ * - {@link sameSiteAllows} / {@link isSameSiteHost} — SameSite enforcement
+ * - A typed error hierarchy ({@link CookieError}, {@link CookieDomainError}, {@link CookieParseError})
+ *
+ * @module
  */
 
 export {
