@@ -39,7 +39,7 @@
     },
     "devDependencies": {
         "@types/node": "^26.1.2",
-        "@browsercore/dev": "file:../dev",
+        "@browsercore/dev": "^0.1.2",
         "@vitest/coverage-v8": "^4.1.10",
         "typescript": "^7.0.0",
         "vitest": "^4.1.10",
