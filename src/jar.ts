@@ -75,8 +75,14 @@ export function createCookieJar(options: CookieJarOptions = {}): CookieJar {
         setCookie(raw: string, url: CookieUrl): void {
             const cookie = parseSetCookieHeader(raw, url);
 
-            // RFC 6265 §5.3 step 11 — reject if the cookie's domain does not domain-match
-            // the request host (when configured to do so).
+            // RFC 6265 §5.3 step 11 (public-suffix check) is enforced at parse time
+            // by parseSetCookieHeader, which throws CookiePublicSuffixError for any
+            // Domain attribute that is a public suffix. The check is unconditional —
+            // rejectDomainMismatch only governs the additional host-matching check
+            // below.
+
+            // Reject if the cookie's domain does not domain-match the request host
+            // (when configured to do so).
             if (rejectDomainMismatch) {
                 const normalizedCookieDomain = cookie.domain;
                 const normalizedHost = url.hostname.toLowerCase();

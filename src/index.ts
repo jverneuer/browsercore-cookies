@@ -26,9 +26,16 @@ export {
 } from "./cookie.js";
 
 export {
+    isPublicSuffix,
+    registrableDomain,
+} from "./public-suffix-list.js";
+
+export {
     CookieError,
     CookieDomainError,
     CookieParseError,
+    CookiePublicSuffixError,
+    CookiePrefixError,
 } from "./errors.js";
 
 export type {

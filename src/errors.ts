@@ -49,3 +49,46 @@ export class CookieParseError extends CookieError {
         this.raw = raw;
     }
 }
+
+/**
+ * RFC 6265 §5.3 step 11 — the cookie's Domain attribute is a public suffix.
+ *
+ * A public suffix (e.g. "com", "co.uk", "github.io") is a domain under which
+ * users register names. Setting a cookie whose scope is a public suffix would
+ * let the cookie leak to every registrant under that suffix, so the spec
+ * mandates the cookie be ignored entirely.
+ */
+export class CookiePublicSuffixError extends CookieError {
+    public override readonly kind = "CookiePublicSuffixError" as const;
+    public readonly domain: string;
+
+    constructor(domain: string) {
+        super(
+            "CookiePublicSuffixError",
+            `Cookie domain "${domain}" is a public suffix (RFC 6265 §5.3 step 11)`,
+        );
+        this.name = "CookiePublicSuffixError";
+        this.domain = domain;
+    }
+}
+
+/**
+ * A `__Host-` or `__Secure-` prefixed cookie violates its prefix's requirements.
+ *
+ * These prefixes (RFC 6265bis §4.1.3.2 / §4.1.3.1) constrain the cookie's
+ * attributes: `__Host-` requires Secure, Path=/, and no Domain; `__Secure-`
+ * requires Secure. A header carrying the prefix but missing the required
+ * attribute must be rejected.
+ */
+export class CookiePrefixError extends CookieError {
+    public override readonly kind = "CookiePrefixError" as const;
+    public readonly cookieName: string;
+    public readonly detail: string;
+
+    constructor(name: string, detail: string) {
+        super("CookiePrefixError", `Cookie "${name}": ${detail}`);
+        this.name = "CookiePrefixError";
+        this.cookieName = name;
+        this.detail = detail;
+    }
+}
