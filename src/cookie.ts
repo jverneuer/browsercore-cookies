@@ -20,7 +20,8 @@ import { assertNever } from "./utils.js";
  * HTTP methods considered "safe" (idempotent reads). SameSite=Lax permits these
  * on cross-site top-level navigations; unsafe methods (POST, PUT, …) are blocked.
  */
-const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+type SafeMethod = "GET" | "HEAD" | "OPTIONS" | "TRACE";
+const SAFE_METHODS: ReadonlySet<SafeMethod> = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
 /**
  * Map from a lowercase SameSite attribute value to its canonical form. Modeling
@@ -32,6 +33,9 @@ const SAME_SITE_BY_LOWERCASE: Readonly<Record<"strict" | "lax" | "none", SameSit
     lax: "Lax",
     none: "None",
 };
+
+/** Secure protocol scheme — cookies with the Secure attribute only send over it. */
+const SECURE_PROTOCOL = "https:" as const;
 
 /**
  * Same-site determination heuristic.
@@ -53,13 +57,18 @@ export function isSameSiteHost(requestHost: string, topLevelSite: string): boole
     return request.endsWith(`.${top}`) || top.endsWith(`.${request}`);
 }
 
+/** Type guard: narrows a `string` to {@link SafeMethod} when it is a known safe method. */
+function isSafeMethod(method: string): method is SafeMethod {
+    return SAFE_METHODS.has(method as SafeMethod);
+}
+
 /** A cross-site top-level navigation using a safe method is Lax-allowed. */
 function isSafeTopLevel(context: SameSiteContext): boolean {
     if (context.isTopLevelNavigation !== true) {
         return false;
     }
     const method = context.method;
-    return method === undefined || SAFE_METHODS.has(method.toUpperCase());
+    return method === undefined || isSafeMethod(method.toUpperCase());
 }
 
 /**
@@ -262,7 +271,7 @@ export function cookieMatchesUrl(
     }
 
     // Secure attribute (RFC 6265 §5.3 step 6 — only send over secure transport).
-    if (cookie.secure && url.protocol !== "https:") {
+    if (cookie.secure && url.protocol !== SECURE_PROTOCOL) {
         return { matched: false, reason: "secure_required" };
     }
 
