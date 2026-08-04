@@ -95,6 +95,8 @@ export interface SameSiteContext {
  * matching URLs. Implementations must be safe to use across requests.
  */
 export interface CookieJar {
+    /** Opaque identifier for this jar. */
+    readonly id: CookieJarId;
     /**
      * Return all cookies that match the given URL, ordered per RFC 6256 §5.4.
      * When `context` is supplied, SameSite enforcement is applied on top of the
