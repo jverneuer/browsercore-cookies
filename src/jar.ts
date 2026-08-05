@@ -34,6 +34,31 @@ function sortForHeader(cookies: readonly Cookie[]): Cookie[] {
     });
 }
 
+/**
+ * Create an in-memory cookie jar — the canonical {@link CookieJar} implementation.
+ *
+ * Cookies are stored in a flat `Map` keyed by a composite `domain\0path\0name`
+ * string, so lookup/insert/delete are O(1) and insertion order is stable.
+ * `getCookies` scans all stored cookies, applies RFC 6265 domain/path matching,
+ * and sorts the results per §5.4 (longer path first, then earlier creation time).
+ *
+ * The returned jar is safe to use across requests. Use {@link createId} for the
+ * jar's id (a branded, collision-resistant identifier).
+ *
+ * @param options - Tuning options. See {@link CookieJarOptions}.
+ * @returns A live {@link CookieJar}.
+ *
+ * @example
+ * ```ts
+ * const jar = createCookieJar();
+ * jar.setCookie("session=abc; Path=/", { hostname: "example.com", pathname: "/", protocol: "https:" });
+ * const cookies = jar.getCookies({ hostname: "example.com", pathname: "/account", protocol: "https:" });
+ * ```
+ *
+ * @see CookieJar for the interface.
+ * @see saveJar / loadJar for persistence.
+ * @since 0.1.0
+ */
 export function createCookieJar(options: CookieJarOptions = {}): CookieJar {
     const rejectDomainMismatch = options.rejectDomainMismatch ?? true;
     // Primary store. A Map keeps insertion order stable and lookups O(1).
