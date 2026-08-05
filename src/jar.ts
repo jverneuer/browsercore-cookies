@@ -17,19 +17,7 @@ import type {
 import { CookieDomainError } from "./errors.js";
 import { cookieMatchesUrl, parseSetCookieHeader } from "./cookie.js";
 import { createId } from "./utils.js";
-
-/**
- * On-disk representation of a serialized jar. `expires` is an ISO string or null
- * (JSON has no Date type); on deserialize it is converted back to a {@link Cookie}.
- */
-interface SerializedJar {
-    readonly entries: readonly SerializedCookie[];
-}
-
-/** A cookie as written to disk: `expires` becomes an ISO string or null. */
-type SerializedCookie = Omit<Cookie, "expires"> & {
-    readonly expires: string | null;
-};
+import { JarSchema, type SerializedCookie } from "./schemas.js";
 
 /** Key used to look up a single cookie: domain + path + name. */
 function cookieKey(domain: string, path: string, name: string): string {
@@ -112,11 +100,22 @@ export function createCookieJar(options: CookieJarOptions = {}): CookieJar {
 
         deserialize(json: string): void {
             store.clear();
-            const parsed = JSON.parse(json) as SerializedJar;
+            const parsed = JarSchema.parse(JSON.parse(json));
             for (const entry of parsed.entries) {
                 const cookie: Cookie = {
-                    ...entry,
+                    name: entry.name,
+                    value: entry.value,
+                    domain: entry.domain,
+                    path: entry.path,
                     expires: entry.expires === null ? undefined : new Date(entry.expires),
+                    maxAge: entry.maxAge,
+                    secure: entry.secure,
+                    httpOnly: entry.httpOnly,
+                    sameSite: entry.sameSite,
+                    partitioned: entry.partitioned,
+                    hostOnly: entry.hostOnly,
+                    creationTime: entry.creationTime,
+                    lastAccessTime: entry.lastAccessTime,
                 };
                 store.set(cookieKey(cookie.domain, cookie.path, cookie.name), cookie);
             }

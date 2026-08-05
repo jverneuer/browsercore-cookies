@@ -46,7 +46,8 @@
         "oxlint": "^1.76.0",
         "oxlint-tsgolint": "7.0.2001",
         "typescript": "^7.0.0",
-        "vitest": "^4.1.10"
+        "vitest": "^4.1.10",
+        "zod": "^4.4.3"
     },
     "engines": {
         "node": ">=26.0.0"
