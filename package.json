@@ -1,6 +1,6 @@
 {
     "name": "@browsercore/cookies",
-    "version": "0.2.0",
+    "version": "0.1.7",
     "description": "RFC 6265-compliant cookie management: parsing, jar, domain matching, persistence. Independent from HTTP.",
     "repository": {
         "type": "git",
@@ -22,6 +22,7 @@
     },
     "files": [
         "dist",
+        "bin",
         "LICENSE",
         "README.md"
     ],
@@ -35,7 +36,8 @@
         "prepublishOnly": "npm run clean && npm run build",
         "typecheck": "tsc -p tsconfig.json --noEmit",
         "test": "vitest run",
-        "lint": "oxlint --type-aware src/"
+        "lint": "oxlint --type-aware src/",
+        "coverage-md": "./bin/coverage-md.mjs"
     },
     "devDependencies": {
         "@browsercore/dev": "latest",
@@ -44,7 +46,8 @@
         "oxlint": "^1.76.0",
         "oxlint-tsgolint": "7.0.2001",
         "typescript": "^7.0.0",
-        "vitest": "^4.1.10"
+        "vitest": "^4.1.10",
+        "zod": "^4.4.3"
     },
     "engines": {
         "node": ">=26.0.0"

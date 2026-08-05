@@ -13,14 +13,16 @@ import type {
     SameSite,
     SameSiteContext,
 } from "./types.js";
-import { CookieParseError } from "./errors.js";
+import { CookieParseError, CookiePrefixError, CookiePublicSuffixError } from "./errors.js";
 import { assertNever } from "./utils.js";
+import { isPublicSuffix, registrableDomain } from "./public-suffix-list.js";
 
 /**
  * HTTP methods considered "safe" (idempotent reads). SameSite=Lax permits these
  * on cross-site top-level navigations; unsafe methods (POST, PUT, …) are blocked.
  */
-const SAFE_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+type SafeMethod = "GET" | "HEAD" | "OPTIONS" | "TRACE";
+const SAFE_METHODS: ReadonlySet<SafeMethod> = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
 
 /**
  * Map from a lowercase SameSite attribute value to its canonical form. Modeling
@@ -33,16 +35,40 @@ const SAME_SITE_BY_LOWERCASE: Readonly<Record<"strict" | "lax" | "none", SameSit
     none: "None",
 };
 
+/** Secure protocol scheme — cookies with the Secure attribute only send over it. */
+const SECURE_PROTOCOL = "https:" as const;
+
 /**
- * Same-site determination heuristic.
+ * Same-site determination — registrable-domain comparison.
  *
- * A request is "same-site" when the request host shares the registrable domain
- * with the top-level site. We approximate the registrable-domain comparison
- * pragmatically: two hosts are same-site when they are exactly equal OR one is a
- * suffix of the other (e.g. `login.example.com` vs `example.com`). This covers
- * the common cases (exact match and parent/subdomain) without a public-suffix
- * lookup, at the cost of treating e.g. bare `example.com` vs `evil.example.com`
- * as same-site — acceptable for an in-process client library.
+ * Per the latest SameSite spec (RFC 6265bis), two hosts are "same-site" when
+ * they share a registrable domain (eTLD+1). We use the bundled Public Suffix
+ * List to compute the registrable base of each host and compare those.
+ *
+ * This fixes a cross-site leak in the previous suffix-match heuristic: a site
+ * hosted on a public suffix (e.g. `foo.github.io` vs `bar.github.io`) was
+ * incorrectly treated as same-site because `bar.github.io` ends with `.github.io`,
+ * when in fact they are *cross-site* (their registrable domains differ). The
+ * PSL-aware comparison correctly distinguishes these.
+ *
+ * For hosts whose TLD is not in the bundled PSL (private/unlisted TLDs), we
+ * fall back to the registrable-domain computation that returns the rightmost
+ * two labels — same behavior as the old heuristic for non-PSL TLDs.
+ *
+ * @param requestHost - The host the request is being made to.
+ * @param topLevelSite - The hostname of the site in whose context the request was initiated.
+ * @returns `true` when the two hosts are considered same-site.
+ *
+ * @example
+ * ```ts
+ * isSameSiteHost("login.example.com", "example.com"); // true — shared registrable domain
+ * isSameSiteHost("foo.github.io", "bar.github.io");   // false — cross-site on a public suffix
+ * isSameSiteHost("example.com", "example.com");       // true — exact match
+ * isSameSiteHost("evil.com", "example.com");          // false — different registrable domain
+ * ```
+ *
+ * @see sameSiteAllows for the full SameSite enforcement logic.
+ * @since 0.1.0
  */
 export function isSameSiteHost(requestHost: string, topLevelSite: string): boolean {
     const request = normalizeDomain(requestHost);
@@ -50,7 +76,20 @@ export function isSameSiteHost(requestHost: string, topLevelSite: string): boole
     if (request === top) {
         return true;
     }
-    return request.endsWith(`.${top}`) || top.endsWith(`.${request}`);
+    const requestBase = registrableDomain(request);
+    const topBase = registrableDomain(top);
+    // If either registrable base is null (the host IS a public suffix), they
+    // can only be same-site when they are the exact same public suffix — and
+    // that is covered by the `request === top` check above.
+    if (requestBase === null || topBase === null) {
+        return false;
+    }
+    return requestBase === topBase;
+}
+
+/** Type guard: narrows a `string` to {@link SafeMethod} when it is a known safe method. */
+function isSafeMethod(method: string): method is SafeMethod {
+    return SAFE_METHODS.has(method as SafeMethod);
 }
 
 /** A cross-site top-level navigation using a safe method is Lax-allowed. */
@@ -59,15 +98,32 @@ function isSafeTopLevel(context: SameSiteContext): boolean {
         return false;
     }
     const method = context.method;
-    return method === undefined || SAFE_METHODS.has(method.toUpperCase());
+    return method === undefined || isSafeMethod(method.toUpperCase());
 }
 
 /**
  * SameSite enforcement (RFC 6265bis §5.3.7 / §8.8.2).
  *
- * - Strict: send only on same-site requests.
- * - Lax: send on same-site requests and on safe cross-site top-level navigations.
- * - None: always send (Secure-ness is enforced separately by the Secure check).
+ * - **Strict**: send only on same-site requests.
+ * - **Lax**: send on same-site requests and on safe cross-site top-level navigations.
+ * - **None**: always send (Secure-ness is enforced separately by the Secure check).
+ *
+ * @param cookie - The cookie whose SameSite policy is being evaluated.
+ * @param url - The request URL the cookie would be sent to.
+ * @param context - The {@link SameSiteContext}: top-level site, navigation type, and method.
+ * @returns `true` when the cookie's SameSite policy permits sending it for this request.
+ *
+ * @example
+ * ```ts
+ * sameSiteAllows(cookie, url, {
+ *     topLevelSite: "example.com",
+ *     isTopLevelNavigation: true,
+ *     method: "GET",
+ * });
+ * ```
+ *
+ * @see isSameSiteHost for the same-site heuristic.
+ * @since 0.1.0
  */
 export function sameSiteAllows(cookie: Cookie, url: CookieUrl, context: SameSiteContext): boolean {
     const sameSite = isSameSiteHost(url.hostname, context.topLevelSite);
@@ -91,12 +147,42 @@ export function sameSiteAllows(cookie: Cookie, url: CookieUrl, context: SameSite
  * domain and the request host (see {@link cookieMatchesUrl} and {@link jar.ts}'s
  * setCookie check), stripping it symmetrically keeps comparisons consistent and
  * prevents a `Domain=example.com.` cookie from failing to match `example.com`.
+ *
+ * @param domain - The domain string to normalize.
+ * @returns A lowercased domain with no leading or trailing dots.
+ *
+ * @example
+ * ```ts
+ * normalizeDomain("Example.COM");    // "example.com"
+ * normalizeDomain(".example.com.");  // "example.com"
+ * ```
+ *
+ * @since 0.1.0
  */
 export function normalizeDomain(domain: string): string {
     return domain.trim().toLowerCase().replaceAll(/^\.+|\.+$/gu, "");
 }
 
-/** Compute the default path per RFC 6265 §5.1.4 from a request path. */
+/**
+ * Compute the default-path per RFC 6265 §5.1.4 from a request path.
+ *
+ * The default path is the "directory" of the request-uri: everything up to but
+ * not including the last `/`. A request path of `/` or `/foo` yields `/`; a
+ * request path of `/foo/bar` yields `/foo`.
+ *
+ * @param pathname - The request URL's pathname (e.g. `"/foo/bar"`).
+ * @returns The default cookie path (always starts with `/`).
+ *
+ * @example
+ * ```ts
+ * defaultPath("/");         // "/"
+ * defaultPath("/foo");      // "/"
+ * defaultPath("/foo/bar");  // "/foo"
+ * defaultPath("");          // "/"
+ * ```
+ *
+ * @since 0.1.0
+ */
 export function defaultPath(pathname: string): string {
     if (pathname === "" || !pathname.startsWith("/")) {
         return "/";
@@ -109,7 +195,34 @@ export function defaultPath(pathname: string): string {
     return pathname.slice(0, lastSlash);
 }
 
-/** Parse a single Set-Cookie header value into a {@link Cookie}. */
+/**
+ * Parse a single `Set-Cookie` header value into a {@link Cookie}.
+ *
+ * Implements the parsing rules from RFC 6265 §5.2: extracts the `name=value` pair,
+ * applies defaults for absent attributes, and interprets the standard attributes
+ * (`Expires`, `Max-Age`, `Domain`, `Path`, `Secure`, `HttpOnly`, `SameSite`,
+ * `Partitioned`).
+ *
+ * @param raw - The full `Set-Cookie` header value (e.g. `"session=abc; Path=/; Secure"`).
+ * @param url - The request URL the cookie was received with, used for defaults
+ *   (domain falls back to the host; path falls back to the request path).
+ * @returns A fully populated {@link Cookie}.
+ * @throws {CookieParseError} If the header is empty, has a malformed `name=value`
+ *   pair, or carries an invalid `Expires` / `Max-Age` value.
+ *
+ * @example
+ * ```ts
+ * const cookie = parseSetCookieHeader(
+ *     "session=abc123; Expires=Wed, 21 Oct 2025 07:28:00 GMT; Path=/; Secure; SameSite=Lax",
+ *     { hostname: "example.com", pathname: "/", protocol: "https:" },
+ * );
+ * // cookie.name === "session"
+ * // cookie.domain === "example.com"
+ * ```
+ *
+ * @see makeCookie for building a cookie from {@link CookieOptions} without parsing.
+ * @since 0.1.0
+ */
 export function parseSetCookieHeader(raw: string, url: CookieUrl): Cookie {
     const now = Date.now();
     const parts = raw.split(";").map((p) => p.trim()).filter((p) => p !== "");
@@ -195,6 +308,33 @@ export function parseSetCookieHeader(raw: string, url: CookieUrl): Cookie {
         }
     }
 
+    // RFC 6265bis §4.1.3.1 (__Host-) and §4.1.3.2 (__Secure-) prefix
+    // enforcement. Prefix validation runs last, after all attributes have been
+    // parsed, so it can check Secure, Path, and Domain (hostOnly) together.
+    if (name.startsWith("__Host-")) {
+        if (!secure) {
+            throw new CookiePrefixError(name, "__Host- prefix requires the Secure attribute");
+        }
+        if (path !== "/") {
+            throw new CookiePrefixError(name, "__Host- prefix requires Path=/");
+        }
+        // A __Host- cookie must not carry a Domain attribute (hostOnly must be true).
+        if (!hostOnly) {
+            throw new CookiePrefixError(name, "__Host- prefix forbids the Domain attribute");
+        }
+    }
+    if (name.startsWith("__Secure-") && !secure) {
+        throw new CookiePrefixError(name, "__Secure- prefix requires the Secure attribute");
+    }
+
+    // RFC 6265 §5.3 step 11 — reject if the cookie's scope is a public suffix.
+    // A cookie whose Domain attribute (or implicit host) is a public suffix would
+    // be shared across every registrant under that suffix, so the spec mandates
+    // the cookie be ignored entirely.
+    if (isPublicSuffix(domain)) {
+        throw new CookiePublicSuffixError(domain);
+    }
+
     return {
         name,
         value,
@@ -212,7 +352,24 @@ export function parseSetCookieHeader(raw: string, url: CookieUrl): Cookie {
     };
 }
 
-/** Check whether the cookie has expired relative to `now` (ms epoch). */
+/**
+ * Check whether the cookie has expired relative to `now` (ms epoch).
+ *
+ * A cookie expires when its `Max-Age` window (from `creationTime`) has elapsed,
+ * or when its absolute `Expires` date has passed. A session cookie (neither
+ * `maxAge` nor `expires`) never expires.
+ *
+ * @param cookie - The {@link Cookie} to test.
+ * @param now - The current time in ms epoch (defaults to `Date.now()`).
+ * @returns `true` when the cookie has expired.
+ *
+ * @example
+ * ```ts
+ * isExpired(sessionCookie, Date.now()); // false (session cookie)
+ * ```
+ *
+ * @since 0.1.0
+ */
 export function isExpired(cookie: Cookie, now: number): boolean {
     if (cookie.maxAge !== undefined) {
         return cookie.creationTime + cookie.maxAge * 1000 <= now;
@@ -229,6 +386,31 @@ export function isExpired(cookie: Cookie, now: number): boolean {
  * supplied, SameSite enforcement (RFC 6265bis) is applied on top: a cookie is
  * rejected with reason `"same_site"` when its SameSite policy forbids sending it
  * for the given request initiator/navigation.
+ *
+ * Checks are applied in the order: expiration → domain → path → secure → same-site,
+ * and the first failure short-circuits with its reason.
+ *
+ * @param cookie - The {@link Cookie} to test.
+ * @param url - The request URL the cookie would be sent to.
+ * @param context - Optional {@link SameSiteContext} to enforce the SameSite attribute.
+ * @param now - Current time in ms epoch, for the expiry check. Defaults to `Date.now()`.
+ * @returns A {@link CookieMatchResult} indicating whether the cookie should be sent.
+ *
+ * @example
+ * ```ts
+ * const result = cookieMatchesUrl(cookie, {
+ *     hostname: "example.com",
+ *     pathname: "/account",
+ *     protocol: "https:",
+ * });
+ * if (!result.matched) {
+ *     console.log(`Rejected: ${result.reason}`);
+ * }
+ * ```
+ *
+ * @see isExpired for the expiry check alone.
+ * @see sameSiteAllows for SameSite enforcement alone.
+ * @since 0.1.0
  */
 export function cookieMatchesUrl(
     cookie: Cookie,
@@ -262,7 +444,7 @@ export function cookieMatchesUrl(
     }
 
     // Secure attribute (RFC 6265 §5.3 step 6 — only send over secure transport).
-    if (cookie.secure && url.protocol !== "https:") {
+    if (cookie.secure && url.protocol !== SECURE_PROTOCOL) {
         return { matched: false, reason: "secure_required" };
     }
 
@@ -276,7 +458,29 @@ export function cookieMatchesUrl(
     return { matched: true, reason: "ok" };
 }
 
-/** Build a {@link Cookie} from {@link CookieOptions}, applying defaults. */
+/**
+ * Build a {@link Cookie} from {@link CookieOptions}, applying RFC 6265 defaults.
+ *
+ * Unlike {@link parseSetCookieHeader}, this does not parse a header — it constructs
+ * a cookie from a structured options object, filling in sensible defaults for
+ * any absent field (e.g. `Secure` → `false`, `SameSite` → `"Lax"`, `hostOnly` → `true`).
+ *
+ * @param options - The cookie fields. Absent fields get defaults.
+ * @param url - The request URL, used for domain/path defaults when not specified.
+ * @param now - Creation/access time in ms epoch. Defaults to `Date.now()`.
+ * @returns A fully populated {@link Cookie}.
+ *
+ * @example
+ * ```ts
+ * const cookie = makeCookie(
+ *     { name: "theme", value: "dark", path: "/", secure: true },
+ *     { hostname: "example.com", pathname: "/", protocol: "https:" },
+ * );
+ * ```
+ *
+ * @see parseSetCookieHeader for parsing a `Set-Cookie` header.
+ * @since 0.1.0
+ */
 export function makeCookie(options: CookieOptions, url: CookieUrl, now = Date.now()): Cookie {
     return {
         name: options.name,
