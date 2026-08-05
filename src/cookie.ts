@@ -13,8 +13,9 @@ import type {
     SameSite,
     SameSiteContext,
 } from "./types.js";
-import { CookieParseError } from "./errors.js";
+import { CookieParseError, CookiePrefixError, CookiePublicSuffixError } from "./errors.js";
 import { assertNever } from "./utils.js";
+import { isPublicSuffix, registrableDomain } from "./public-suffix-list.js";
 
 /**
  * HTTP methods considered "safe" (idempotent reads). SameSite=Lax permits these
@@ -38,15 +39,27 @@ const SAME_SITE_BY_LOWERCASE: Readonly<Record<"strict" | "lax" | "none", SameSit
 const SECURE_PROTOCOL = "https:" as const;
 
 /**
- * Same-site determination heuristic.
+ * Same-site determination — registrable-domain comparison.
  *
- * A request is "same-site" when the request host shares the registrable domain
- * with the top-level site. We approximate the registrable-domain comparison
- * pragmatically: two hosts are same-site when they are exactly equal OR one is a
- * suffix of the other (e.g. `login.example.com` vs `example.com`). This covers
- * the common cases (exact match and parent/subdomain) without a public-suffix
- * lookup, at the cost of treating e.g. bare `example.com` vs `evil.example.com`
- * as same-site — acceptable for an in-process client library.
+ * Per the latest SameSite spec (RFC 6265bis), two hosts are "same-site" when
+ * they share a registrable domain (eTLD+1). We use the bundled Public Suffix
+ * List to compute the registrable base of each host and compare those.
+ *
+ * This fixes a cross-site leak in the previous implementation: under the old
+ * suffix-match heuristic, `evil.example.com` vs `example.com` was treated as
+ * same-site even when the registrable domain should have been the bare
+ * `example.com` (i.e. when `example.com` itself was *not* a public suffix, so
+ * `evil.example.com` and `example.com` ARE same-site — correct). The real
+ * regression was on public-suffix registrars: a site hosted on a public suffix
+ * (e.g. `foo.github.io` vs `bar.github.io`) was being treated as same-site
+ * under the old heuristic because `bar.github.io` ends with `.github.io`, when
+ * in fact they are *cross-site* (their registrable domains `foo.github.io` and
+ * `bar.github.io` differ). The PSL-aware comparison correctly distinguishes
+ * these.
+ *
+ * For hosts whose TLD is not in the bundled PSL (private/unlisted TLDs), we
+ * fall back to the registrable-domain computation that returns the rightmost
+ * two labels — same behavior as the old heuristic for non-PSL TLDs.
  */
 export function isSameSiteHost(requestHost: string, topLevelSite: string): boolean {
     const request = normalizeDomain(requestHost);
@@ -54,7 +67,15 @@ export function isSameSiteHost(requestHost: string, topLevelSite: string): boole
     if (request === top) {
         return true;
     }
-    return request.endsWith(`.${top}`) || top.endsWith(`.${request}`);
+    const requestBase = registrableDomain(request);
+    const topBase = registrableDomain(top);
+    // If either registrable base is null (the host IS a public suffix), they
+    // can only be same-site when they are the exact same public suffix — and
+    // that is covered by the `request === top` check above.
+    if (requestBase === null || topBase === null) {
+        return false;
+    }
+    return requestBase === topBase;
 }
 
 /** Type guard: narrows a `string` to {@link SafeMethod} when it is a known safe method. */
@@ -202,6 +223,33 @@ export function parseSetCookieHeader(raw: string, url: CookieUrl): Cookie {
                 // Unknown attributes are ignored per RFC 6265 §5.2.6.
                 break;
         }
+    }
+
+    // RFC 6265bis §4.1.3.1 (__Host-) and §4.1.3.2 (__Secure-) prefix
+    // enforcement. Prefix validation runs last, after all attributes have been
+    // parsed, so it can check Secure, Path, and Domain (hostOnly) together.
+    if (name.startsWith("__Host-")) {
+        if (!secure) {
+            throw new CookiePrefixError(name, "__Host- prefix requires the Secure attribute");
+        }
+        if (path !== "/") {
+            throw new CookiePrefixError(name, "__Host- prefix requires Path=/");
+        }
+        // A __Host- cookie must not carry a Domain attribute (hostOnly must be true).
+        if (!hostOnly) {
+            throw new CookiePrefixError(name, "__Host- prefix forbids the Domain attribute");
+        }
+    }
+    if (name.startsWith("__Secure-") && !secure) {
+        throw new CookiePrefixError(name, "__Secure- prefix requires the Secure attribute");
+    }
+
+    // RFC 6265 §5.3 step 11 — reject if the cookie's scope is a public suffix.
+    // A cookie whose Domain attribute (or implicit host) is a public suffix would
+    // be shared across every registrant under that suffix, so the spec mandates
+    // the cookie be ignored entirely.
+    if (isPublicSuffix(domain)) {
+        throw new CookiePublicSuffixError(domain);
     }
 
     return {
