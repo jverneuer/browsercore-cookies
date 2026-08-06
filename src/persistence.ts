@@ -1,60 +1,69 @@
 /**
- * Cookie jar persistence — JSON file load/save.
+ * Cookie jar persistence — pure serialization helpers.
  *
- * Uses node:fs for file I/O. This is the only module in the package that touches
- * the filesystem; the core jar logic stays I/O-free.
+ * These functions are I/O-free: {@link serializeJar} turns a jar into a JSON
+ * string, {@link deserializeJar} rebuilds a jar from that string. The caller
+ * handles file I/O, keeping the cookies package runtime-independent
+ * (Rule #21) and unit-testable without a real filesystem.
  */
 
-import { readFile, writeFile } from "node:fs/promises";
 import type { CookieJar } from "./types.js";
 import { createCookieJar } from "./jar.js";
+import { CookieSerializationError } from "./errors.js";
 
 /**
- * Persist a jar's contents to a JSON file.
+ * Serialize a cookie jar to a JSON string.
  *
- * Writes the output of {@link CookieJar.serialize} to disk using `node:fs/promises`.
- * This is the only module in the package that touches the filesystem; the core
- * jar logic stays I/O-free.
+ * The inverse of {@link deserializeJar}. The caller is responsible for writing
+ * the result to disk (e.g. via `node:fs`).
  *
- * @param jar - The {@link CookieJar} to persist.
- * @param filePath - Destination file path.
- * @returns A promise that resolves once the file is written.
+ * @param jar - The {@link CookieJar} to serialize.
+ * @returns A JSON string representing the jar's contents.
  *
  * @example
  * ```ts
- * await saveJar(jar, "./cookies.json");
+ * import { writeFile } from "node:fs/promises";
+ * await writeFile("./cookies.json", serializeJar(jar), "utf8");
  * ```
  *
- * @see loadJar for the inverse operation.
+ * @see deserializeJar for the inverse operation.
  * @since 0.1.0
  */
-export async function saveJar(jar: CookieJar, filePath: string): Promise<void> {
-    const json = jar.serialize();
-    await writeFile(filePath, json, "utf8");
+export function serializeJar(jar: CookieJar): string {
+    return jar.serialize();
 }
 
 /**
- * Load a jar from a JSON file.
+ * Deserialize a JSON string into a cookie jar.
  *
- * Reads a file previously written by {@link saveJar}, creates a fresh jar
- * (via {@link createCookieJar}), and populates it via {@link CookieJar.deserialize}.
- * The returned jar has a new id (a fresh call to {@link createId}).
+ * Creates a fresh jar (via {@link createCookieJar}) and populates it from the
+ * given JSON string (via {@link CookieJar.deserialize}). The returned jar has
+ * a new id (a fresh call to {@link createId}).
  *
- * @param filePath - Path to a JSON file produced by {@link saveJar}.
- * @returns A promise that resolves with a populated {@link CookieJar}.
- * @throws {Error} If the file cannot be read or contains invalid JSON.
+ * @param data - A JSON string produced by {@link serializeJar}.
+ * @returns A populated {@link CookieJar}.
+ * @throws {@link CookieSerializationError} If the JSON is malformed or does
+ *   not conform to the expected schema.
  *
  * @example
  * ```ts
- * const jar = await loadJar("./cookies.json");
+ * import { readFile } from "node:fs/promises";
+ * const json = await readFile("./cookies.json", "utf8");
+ * const jar = deserializeJar(json);
  * ```
  *
- * @see saveJar for the inverse operation.
+ * @see serializeJar for the inverse operation.
  * @since 0.1.0
  */
-export async function loadJar(filePath: string): Promise<CookieJar> {
-    const json = await readFile(filePath, "utf8");
+export function deserializeJar(data: string): CookieJar {
     const jar = createCookieJar();
-    jar.deserialize(json);
+    try {
+        jar.deserialize(data);
+    } catch (err) {
+        throw new CookieSerializationError(
+            `Failed to deserialize cookie jar: ${err instanceof Error ? err.message : String(err)}`,
+            err instanceof Error ? { cause: err } : undefined,
+        );
+    }
     return jar;
 }

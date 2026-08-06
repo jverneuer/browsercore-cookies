@@ -110,8 +110,8 @@ export interface SameSiteContext {
  * A cookie jar — the mutable container that stores cookies and serves them for
  * matching URLs. Implementations must be safe to use across requests.
  *
- * The canonical implementation is {@link createCookieJar}. Persist a jar with
- * {@link saveJar} / {@link loadJar}.
+ * The canonical implementation is {@link createCookieJar}. Serialize a jar with
+ * {@link serializeJar} / {@link deserializeJar}.
  */
 export interface CookieJar {
     /** Opaque identifier for this jar. */

@@ -6,7 +6,7 @@
  *
  * The package provides:
  * - {@link createCookieJar} — the canonical in-memory {@link CookieJar}
- * - {@link saveJar} / {@link loadJar} — JSON file persistence
+ * - {@link serializeJar} / {@link deserializeJar} — JSON serialization helpers
  * - {@link parseSetCookieHeader} / {@link makeCookie} — cookie construction
  * - {@link cookieMatchesUrl} / {@link isExpired} / {@link normalizeDomain} / {@link defaultPath} — matching primitives
  * - {@link sameSiteAllows} / {@link isSameSiteHost} — SameSite enforcement
@@ -20,8 +20,8 @@ export {
 } from "./jar.js";
 
 export {
-    saveJar,
-    loadJar,
+    serializeJar,
+    deserializeJar,
 } from "./persistence.js";
 
 export {
@@ -46,6 +46,7 @@ export {
     CookieParseError,
     CookiePublicSuffixError,
     CookiePrefixError,
+    CookieSerializationError,
 } from "./errors.js";
 
 export type {

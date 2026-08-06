@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
     createCookieJar,
     parseSetCookieHeader,
     CookieDomainError,
-    saveJar,
-    loadJar,
+    CookieSerializationError,
+    serializeJar,
+    deserializeJar,
 } from "../src/index.js";
 import type { CookieJarId, CookieUrl } from "../src/types.js";
 
@@ -138,7 +139,7 @@ describe("cookie jar serialization with expiry", () => {
     });
 });
 
-describe("persistence (saveJar / loadJar)", () => {
+describe("persistence (serializeJar / deserializeJar + caller file I/O)", () => {
     it("writes a jar to disk and reads it back", async () => {
         const dir = await mkdtemp(join(tmpdir(), "cookies-"));
         const file = join(dir, "jar.json");
@@ -146,13 +147,23 @@ describe("persistence (saveJar / loadJar)", () => {
             const jar = createCookieJar();
             jar.setCookie("session=abc; Path=/; Secure", exampleUrl);
             jar.setCookie("prefs=dark", exampleUrl);
-            await saveJar(jar, file);
+            await writeFile(file, serializeJar(jar), "utf8");
 
-            const loaded = await loadJar(file);
+            const loaded = deserializeJar(await readFile(file, "utf8"));
             const cookies = loaded.getCookies(exampleUrl);
             expect(cookies.map((c) => c.name).sort()).toEqual(["prefs", "session"]);
         } finally {
             await rm(dir, { recursive: true, force: true });
         }
+    });
+
+    it("throws CookieSerializationError on malformed JSON", () => {
+        expect(() => deserializeJar("not json")).toThrow(CookieSerializationError);
+    });
+
+    it("throws CookieSerializationError on invalid schema", () => {
+        expect(() => deserializeJar(JSON.stringify({ entries: [{ name: "only" }] }))).toThrow(
+            CookieSerializationError,
+        );
     });
 });
