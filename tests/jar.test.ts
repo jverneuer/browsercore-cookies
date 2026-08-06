@@ -6,6 +6,7 @@ import {
     createCookieJar,
     parseSetCookieHeader,
     CookieDomainError,
+    CookieSerializationError,
     serializeJar,
     deserializeJar,
 } from "../src/index.js";
@@ -154,5 +155,15 @@ describe("persistence (serializeJar / deserializeJar + caller file I/O)", () => 
         } finally {
             await rm(dir, { recursive: true, force: true });
         }
+    });
+
+    it("throws CookieSerializationError on malformed JSON", () => {
+        expect(() => deserializeJar("not json")).toThrow(CookieSerializationError);
+    });
+
+    it("throws CookieSerializationError on invalid schema", () => {
+        expect(() => deserializeJar(JSON.stringify({ entries: [{ name: "only" }] }))).toThrow(
+            CookieSerializationError,
+        );
     });
 });
