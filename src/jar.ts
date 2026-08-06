@@ -56,7 +56,7 @@ function sortForHeader(cookies: readonly Cookie[]): Cookie[] {
  * ```
  *
  * @see CookieJar for the interface.
- * @see saveJar / loadJar for persistence.
+ * @see serializeJar / deserializeJar for persistence.
  * @since 0.1.0
  */
 export function createCookieJar(options: CookieJarOptions = {}): CookieJar {

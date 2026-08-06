@@ -144,6 +144,24 @@ export class CookiePublicSuffixError extends CookieError {
 }
 
 /**
+ * A cookie jar could not be serialized or deserialized.
+ *
+ * Raised by {@link serializeJar} / {@link deserializeJar} when the JSON is
+ * malformed or does not conform to the expected schema. The `cause` preserves
+ * the underlying `JSON.parse` / Zod error for debugging.
+ *
+ * @since 0.1.0
+ */
+export class CookieSerializationError extends CookieError {
+    public override readonly kind = "CookieSerializationError" as const;
+
+    constructor(message: string, options?: { cause?: Error }) {
+        super("CookieSerializationError", message, options);
+        this.name = "CookieSerializationError";
+    }
+}
+
+/**
  * A `__Host-` or `__Secure-` prefixed cookie violates its prefix's requirements.
  *
  * These prefixes (RFC 6265bis §4.1.3.2 / §4.1.3.1) constrain the cookie's
