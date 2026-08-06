@@ -2,7 +2,7 @@
 
 
 [![npm version](https://img.shields.io/npm/v/@browsercore/cookies)](https://www.npmjs.com/package/@browsercore/cookies)
-[![coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/jverneuer/browsercore-cookies/main/.github/coverage-badge.json)](https://github.com/jverneuer/browsercore-cookies/blob/main/COVERAGE.md)
+[![coverage](https://img.shields.io/endpoint?url=https://jverneuer.github.io/browsercore-cookies/badge.json)](https://github.com/jverneuer/browsercore-cookies/blob/main/COVERAGE.md)
 [![lint](https://img.shields.io/github/actions/workflow/status/jverneuer/browsercore-cookies/ci.yml?label=lint)](https://github.com/jverneuer/browsercore-cookies/actions/workflows/ci.yml)
 
 RFC 6265-compliant cookie management: parsing, jar, domain matching, SameSite enforcement, and JSON persistence — independent from any HTTP transport.
