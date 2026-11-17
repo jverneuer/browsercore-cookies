@@ -14,7 +14,6 @@ import {
     isSameSiteHost,
     makeCookie,
     sameSiteAllows,
-    normalizeDomain,
     defaultPath,
 } from "../src/index.js";
 import type { Cookie, CookieUrl } from "../src/types.js";

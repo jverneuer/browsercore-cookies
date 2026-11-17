@@ -3,7 +3,7 @@ import {
     parseSetCookieHeader,
     CookieParseError,
 } from "../src/index.js";
-import type { Cookie, CookieUrl } from "../src/types.js";
+import type { CookieUrl } from "../src/types.js";
 
 const exampleUrl: CookieUrl = {
     hostname: "example.com",
