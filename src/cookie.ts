@@ -331,7 +331,13 @@ export function parseSetCookieHeader(raw: string, url: CookieUrl): Cookie {
     // A cookie whose Domain attribute (or implicit host) is a public suffix would
     // be shared across every registrant under that suffix, so the spec mandates
     // the cookie be ignored entirely.
-    if (isPublicSuffix(domain)) {
+    //
+    // Browser carve-out: the RFC 6762 special-use name `localhost` (and its
+    // subdomains) matches the PSL's `*.localhost` wildcard, but Chrome and
+    // Firefox both allow cookies there — local development and e2e testing
+    // depend on it. "browser-identical" means we follow the browsers, not the
+    // raw wildcard. IP literals never match the PSL, so they need no exemption.
+    if (isPublicSuffix(domain) && domain !== "localhost" && !domain.endsWith(".localhost")) {
         throw new CookiePublicSuffixError(domain);
     }
 

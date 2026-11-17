@@ -148,6 +148,28 @@ describe("parseSetCookieHeader — public-suffix rejection (RFC 6265 §5.3 step 
         );
     });
 
+    it("allows a host-only cookie on localhost (browser carve-out, RFC 6762)", () => {
+        // *.localhost is a PSL wildcard, but real browsers allow cookies on
+        // the loopback special-use name — local dev + e2e depend on it.
+        const localhostUrl: CookieUrl = {
+            hostname: "localhost",
+            pathname: "/",
+            protocol: "http:",
+        };
+        const cookie = parseSetCookieHeader("sid=abc123; Path=/", localhostUrl);
+        expect(cookie.domain).toBe("localhost");
+    });
+
+    it("allows a cookie on a localhost subdomain (foo.localhost)", () => {
+        const subUrl: CookieUrl = {
+            hostname: "foo.localhost",
+            pathname: "/",
+            protocol: "http:",
+        };
+        const cookie = parseSetCookieHeader("sid=abc123", subUrl);
+        expect(cookie.domain).toBe("foo.localhost");
+    });
+
     it("rejects a Domain attribute that is a multi-level suffix", () => {
         expect(() => parseSetCookieHeader("a=1; Domain=co.uk", secureUrl)).toThrow(
             CookiePublicSuffixError,
