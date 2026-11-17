@@ -2,8 +2,9 @@
 
 
 [![npm version](https://img.shields.io/npm/v/@browsercore/cookies)](https://www.npmjs.com/package/@browsercore/cookies)
-[![coverage](https://img.shields.io/endpoint?url=https://jverneuer.github.io/browsercore-cookies/badge.json)](https://github.com/jverneuer/browsercore-cookies/blob/main/COVERAGE.md)
-[![lint](https://img.shields.io/github/actions/workflow/status/jverneuer/browsercore-cookies/ci.yml?label=lint)](https://github.com/jverneuer/browsercore-cookies/actions/workflows/ci.yml)
+[![coverage](https://img.shields.io/endpoint?url=https://jverneuer.github.io/browsercore-cookies/badge.json)](https://jverneuer.github.io/browsercore-cookies/COVERAGE.md)
+[![CI](https://img.shields.io/github/actions/workflow/status/jverneuer/browsercore-cookies/ci.yml?label=ci)](https://github.com/jverneuer/browsercore-cookies/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/@browsercore/cookies.svg)](LICENSE)
 
 RFC 6265-compliant cookie management: parsing, jar, domain matching, SameSite enforcement, and JSON persistence — independent from any HTTP transport.
 
@@ -86,6 +87,11 @@ Everything else conforms (the optional SameSite `context` param, return variance
 ```
 
 No other `@browsercore/*` packages are imported.
+
+
+## Contributing
+
+Contributions are welcome — bug reports, reproductions, docs and code alike. Start with [CONTRIBUTING.md](CONTRIBUTING.md); the full guide lives in the [browsersmith repo](https://github.com/jverneuer/browsersmith/blob/main/CONTRIBUTING.md). First timer? Check the [`good first issue`](https://github.com/jverneuer/browsercore-cookies/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) label. Security issues: [SECURITY.md](SECURITY.md), never a public issue.
 
 ## License
 
