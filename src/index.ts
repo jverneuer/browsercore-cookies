@@ -61,4 +61,14 @@ export type {
     SameSiteContext,
 } from "./types.js";
 
+// Canonical consumer surface (config-type-home unification, audit 2026-11-16
+// item #3 groundwork): the minimal jar interface a cookie-consuming client
+// (fetch) needs — getCookies(url) + setCookie(raw, url), nothing else.
+// Declared canonically in @browsercore/contracts (src/config.ts) and
+// re-exported here so consumers can name it from either package. The rich
+// CookieJar above is the intended structural implementor; the two known
+// divergences (string-vs-CookieUrl url vocabulary, Date-vs-epoch-ms expires)
+// are pinned verbatim in tests/cookie-jar-consumer.test.ts.
+export type { CookieJarConsumer } from "@browsercore/contracts";
+
 export { assertNever } from "./utils.js";
